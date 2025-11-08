@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Copy, Trash2, ChevronsUpDown, Check, X, Info, Settings } from "lucide-react"
+import { Copy, Trash2, ChevronsUpDown, Check, X, Info, Settings, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -677,6 +677,16 @@ export default function Home() {
             {!config ? (
               <div className="text-center py-8 text-muted-foreground">
                 Loading configuration...
+              </div>
+            ) : config.variables.length === 0 ? (
+              <div className="text-center py-8 space-y-4">
+                <p className="text-muted-foreground">No variables configured yet.</p>
+                <Link href="/config">
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Variables
+                  </Button>
+                </Link>
               </div>
             ) : (
               <>
