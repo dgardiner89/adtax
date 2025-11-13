@@ -88,6 +88,7 @@ export default function Home() {
   const [password, setPassword] = useState("")
   const [pendingAction, setPendingAction] = useState<"generate" | "delete" | "clearAll" | null>(null)
   const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null)
+  const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false)
 
   const parseFileName = (fileName: string, variables: Variable[], separator: string): GeneratedName['metadata'] => {
     const parts = fileName.split(separator)
@@ -258,9 +259,14 @@ export default function Home() {
     const transformed = parts.map(part => transformValue(part))
     return transformed.join(config.separator)
   }
-
-  const checkAuthAndExecute = (actionType: "generate" | "delete" | "clearAll", deleteIndex?: number) => {
-    if (!isAuthenticated) {
+  
+  const checkAuthAndExecute = (
+    actionType: "generate" | "delete" | "clearAll",
+    deleteIndex?: number,
+    options?: { forceReauth?: boolean }
+  ) => {
+    const shouldForce = options?.forceReauth ?? false
+    if (!isAuthenticated || shouldForce) {
       setPendingAction(actionType)
       if (deleteIndex !== undefined) {
         setPendingDeleteIndex(deleteIndex)
@@ -630,17 +636,23 @@ export default function Home() {
     setGeneratedNames([])
     try {
       await storage.delete("names")
+      toast.success("All file names cleared", { position: "top-center" })
     } catch (error) {
       console.error("Failed to clear names:", error)
       toast.error("Failed to clear names", { position: "top-center" })
     }
   }
 
-  const handleClearAll = async () => {
-    if (!checkAuthAndExecute("clearAll")) {
-      return
+  const handleClearAll = () => {
+    setClearAllDialogOpen(true)
+  }
+
+  const handleConfirmClearAll = async () => {
+    setClearAllDialogOpen(false)
+    const shouldProceed = checkAuthAndExecute("clearAll", undefined, { forceReauth: true })
+    if (shouldProceed) {
+      await handleClearAllInternal()
     }
-    await handleClearAllInternal()
   }
 
   // Pagination calculations
@@ -958,6 +970,25 @@ export default function Home() {
         ) : null}
       </div>
 
+      <Dialog open={clearAllDialogOpen} onOpenChange={setClearAllDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clear all generated names?</DialogTitle>
+            <DialogDescription>
+              This will permanently remove every saved file name. You'll need to re-enter your password to continue.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearAllDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmClearAll}>
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -985,12 +1016,15 @@ export default function Home() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setPasswordDialogOpen(false)
-              setPassword("")
-              setPendingAction(null)
-              setPendingDeleteIndex(null)
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPasswordDialogOpen(false)
+                setPassword("")
+                setPendingAction(null)
+                setPendingDeleteIndex(null)
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={handlePasswordSubmit}>
