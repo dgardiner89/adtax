@@ -27,7 +27,7 @@ import {
   DialogStackTitle,
   DialogStackTrigger,
 } from "@/components/ui/shadcn-io/dialog-stack"
-import { Trash2, Plus, Edit2, X as XIcon, GripVertical, Info, Lock, Unlock } from "lucide-react"
+import { Trash2, Plus, Edit2, X as XIcon, GripVertical, Info, Lock, Unlock, Download, Upload, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import { storage } from "@/lib/storage"
 import type { Config, Variable, VariableType } from "@/lib/types"
@@ -221,10 +221,265 @@ function SortableVariableItem({
   )
 }
 
+// Variable Dialog Component - extracted to prevent recreation on every render
+function VariableDialog({
+  editingId,
+  dialogOpen,
+  setDialogOpen,
+  setTempVariableId,
+  setEditingId,
+  handleAddVariable,
+  formLabel,
+  setFormLabel,
+  formType,
+  setFormType,
+  formValues,
+  setFormValues,
+  formAllowFreeInput,
+  setFormAllowFreeInput,
+  handleNextToDescriptions,
+  nextButtonRef,
+  handleSaveVariable,
+  tempVariableId,
+  variableDescriptions,
+  optionDescriptions,
+  handleUpdateVariableDescription,
+  handleUpdateOptionDescription,
+}: {
+  editingId: string | null
+  dialogOpen: boolean
+  setDialogOpen: (open: boolean) => void
+  setTempVariableId: (id: string | null) => void
+  setEditingId: (id: string | null) => void
+  handleAddVariable: () => void
+  formLabel: string
+  setFormLabel: (label: string) => void
+  formType: VariableType
+  setFormType: (type: VariableType) => void
+  formValues: string
+  setFormValues: (values: string) => void
+  formAllowFreeInput: boolean
+  setFormAllowFreeInput: (allow: boolean) => void
+  handleNextToDescriptions: () => boolean
+  nextButtonRef: React.RefObject<HTMLButtonElement>
+  handleSaveVariable: () => void
+  tempVariableId: string | null
+  variableDescriptions: Record<string, string>
+  optionDescriptions: Record<string, Record<string, string>>
+  handleUpdateVariableDescription: (variableId: string, description: string) => void
+  handleUpdateOptionDescription: (variableId: string, option: string, description: string) => void
+}) {
+  // Ensure descriptions and formValues are always defined
+  const safeVariableDescriptions = variableDescriptions || {}
+  const safeOptionDescriptions = optionDescriptions || {}
+  const safeFormValues = formValues || ""
+  
+  return (
+    <DialogStack 
+      key={editingId || "new"}
+      open={dialogOpen} 
+      onOpenChange={(open) => {
+        setDialogOpen(open)
+        if (!open) {
+          setTempVariableId(null)
+          setEditingId(null)
+        }
+      }}
+    >
+      {!editingId && (
+        <DialogStackTrigger asChild>
+          <Button onClick={handleAddVariable} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Variable
+          </Button>
+        </DialogStackTrigger>
+      )}
+      <DialogStackOverlay />
+      <DialogStackBody>
+        <DialogStackContent>
+          <DialogStackHeader>
+            <DialogStackTitle>{editingId ? "Edit Variable" : "Add Variable"}</DialogStackTitle>
+            <DialogStackDescription>
+              {editingId ? "Update variable configuration" : "Configure basic variable information"}
+            </DialogStackDescription>
+          </DialogStackHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="var-label">Label</Label>
+              <Input
+                id="var-label"
+                placeholder="e.g., Size, Persona, Funnel"
+                value={formLabel}
+                onChange={(e) => setFormLabel(e.target.value)}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="var-type">Type</Label>
+              <Select value={formType} onValueChange={(value) => setFormType(value as VariableType)}>
+                <SelectTrigger id="var-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="dropdown">Dropdown</SelectItem>
+                  <SelectItem value="multiselect">Multi-select</SelectItem>
+                  <SelectItem value="input">Input Field</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(formType === "dropdown" || formType === "multiselect") && (
+              <div className="space-y-2">
+                <Label htmlFor="var-values">Values (comma-separated)</Label>
+                <Input
+                  id="var-values"
+                  placeholder="e.g., Option1, Option2, Option3"
+                  value={formValues}
+                  onChange={(e) => setFormValues(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter values separated by commas
+                </p>
+                {formType === "dropdown" && (
+                  <div className="flex items-center space-x-2 pt-2">
+                    <Checkbox
+                      id="allow-free-input"
+                      checked={formAllowFreeInput}
+                      onCheckedChange={(checked) => setFormAllowFreeInput(checked === true)}
+                    />
+                    <Label
+                      htmlFor="allow-free-input"
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      Allow free input
+                    </Label>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {formType === "input" && (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Input fields allow free text entry and don&apos;t require predefined values
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogStackFooter className="justify-between">
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
+            <div className="flex gap-2">
+              {!editingId && (
+                <ValidatedNextButton 
+                  onValidate={handleNextToDescriptions}
+                />
+              )}
+              {editingId && (
+                <>
+                  <DialogStackNext asChild>
+                    <button
+                      ref={nextButtonRef}
+                      style={{ display: 'none' }}
+                      aria-hidden="true"
+                      tabIndex={-1}
+                    >
+                      Hidden Next
+                    </button>
+                  </DialogStackNext>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      if (handleNextToDescriptions() && nextButtonRef.current) {
+                        nextButtonRef.current.click()
+                      }
+                    }}
+                  >
+                    Next
+                  </Button>
+                </>
+              )}
+              {editingId && (
+                <Button onClick={handleSaveVariable}>
+                  Save Variable
+                </Button>
+              )}
+            </div>
+          </DialogStackFooter>
+        </DialogStackContent>
+        <DialogStackContent>
+          <DialogStackHeader>
+            <DialogStackTitle>Add Descriptions (Optional)</DialogStackTitle>
+            <DialogStackDescription>
+              Define descriptions for this variable and its options
+            </DialogStackDescription>
+          </DialogStackHeader>
+          <div className="space-y-4 py-4">
+            {(() => {
+              const tempId = tempVariableId || `temp-${Date.now()}`
+              const values = formType === "input" 
+                ? [] 
+                : safeFormValues.split(",").map(v => v.trim()).filter(Boolean)
+              
+              if (!tempId) return null
+              
+              return (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor={`var-desc-new-${tempId}`}>Description</Label>
+                    <textarea
+                      id={`var-desc-new-${tempId}`}
+                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      placeholder={`What does ${formLabel || "this variable"} mean to the final file name?`}
+                      value={safeVariableDescriptions[tempId] || ""}
+                      onChange={(e) => handleUpdateVariableDescription(tempId, e.target.value)}
+                    />
+                  </div>
+
+                  {(formType === "dropdown" || formType === "multiselect") && values.length > 0 && (
+                    <div className="space-y-3">
+                      <Label>Option Descriptions</Label>
+                      {values.map((option) => (
+                        <div key={option} className="space-y-2">
+                          <Label htmlFor={`desc-new-${tempId}-${option}`} className="text-sm font-normal">
+                            {option}
+                          </Label>
+                          <Input
+                            id={`desc-new-${tempId}-${option}`}
+                            placeholder={`Description for ${option}`}
+                            value={safeOptionDescriptions[tempId]?.[option] || ""}
+                            onChange={(e) => handleUpdateOptionDescription(tempId, option, e.target.value)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+          </div>
+          <DialogStackFooter className="justify-between">
+            <DialogStackPrevious asChild>
+              <Button variant="outline">Previous</Button>
+            </DialogStackPrevious>
+            <Button onClick={handleSaveVariable}>
+              {editingId ? "Save Variable" : "Create Variable"}
+            </Button>
+          </DialogStackFooter>
+        </DialogStackContent>
+      </DialogStackBody>
+    </DialogStack>
+  )
+}
+
 export default function ConfigPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const nextButtonRef = useRef<HTMLButtonElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [hasConfig, setHasConfig] = useState(false)
   const [variables, setVariables] = useState<Variable[]>([])
   const [caseTransform, setCaseTransform] = useState<"uppercase" | "lowercase" | "none">("lowercase")
   const [separator, setSeparator] = useState("_")
@@ -236,6 +491,12 @@ export default function ConfigPage() {
   const [tempVariableId, setTempVariableId] = useState<string | null>(null)
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
   const [password, setPassword] = useState("")
+  const [pendingAction, setPendingAction] = useState<"export" | "import" | "delete" | "unlock" | null>(null)
+  const [lastExportTimestamp, setLastExportTimestamp] = useState<number | null>(null)
+  const [lastModifiedTimestamp, setLastModifiedTimestamp] = useState<number | null>(null)
+  const [importWarningDialogOpen, setImportWarningDialogOpen] = useState(false)
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null)
+  const [deleteConfigDialogOpen, setDeleteConfigDialogOpen] = useState(false)
   
   // Form state for new/editing variable
   const [formLabel, setFormLabel] = useState("")
@@ -293,6 +554,7 @@ export default function ConfigPage() {
   // Load config from storage on mount
   useEffect(() => {
     const loadConfig = async () => {
+      setIsLoading(true)
       // First, try to migrate from localStorage if it exists
       const localStored = localStorage.getItem(STORAGE_KEY)
       if (localStored) {
@@ -302,6 +564,7 @@ export default function ConfigPage() {
           setCaseTransform(config.caseTransform || "lowercase")
           setSeparator(config.separator || "_")
           setLocked(config.locked || false)
+          setHasConfig(true)
           // Initialize variable and option descriptions from variables
           const initialVarDescriptions: Record<string, string> = {}
           const initialOptionDescriptions: Record<string, Record<string, string>> = {}
@@ -317,6 +580,8 @@ export default function ConfigPage() {
           await storage.set("config", config)
           // Clear localStorage after migration
           localStorage.removeItem(STORAGE_KEY)
+          setLastModifiedTimestamp(Date.now())
+          setIsLoading(false)
           return
         } catch (e) {
           console.error("Failed to parse localStorage config:", e)
@@ -331,6 +596,7 @@ export default function ConfigPage() {
           setCaseTransform(stored.caseTransform || "lowercase")
           setSeparator(stored.separator || "_")
           setLocked(stored.locked || false)
+          setHasConfig(true)
           // Initialize variable and option descriptions from variables
           const initialVarDescriptions: Record<string, string> = {}
           const initialOptionDescriptions: Record<string, Record<string, string>> = {}
@@ -342,9 +608,15 @@ export default function ConfigPage() {
           })
           setVariableDescriptions(initialVarDescriptions)
           setOptionDescriptions(initialOptionDescriptions)
+          setLastModifiedTimestamp(Date.now())
+        } else {
+          setHasConfig(false)
         }
       } catch (e) {
         console.error("Failed to load config:", e)
+        setHasConfig(false)
+      } finally {
+        setIsLoading(false)
       }
     }
     
@@ -382,6 +654,8 @@ export default function ConfigPage() {
     }
     try {
       await storage.set("config", config)
+      setHasConfig(true)
+      setLastModifiedTimestamp(Date.now())
       return true
     } catch (error) {
       console.error("Failed to save config:", error)
@@ -412,7 +686,7 @@ export default function ConfigPage() {
 
     const values = formType === "input" 
       ? [] 
-      : formValues.split(",").map(v => v.trim()).filter(Boolean).filter(v => v !== "{free_input}")
+      : (formValues || "").split(",").map(v => v.trim()).filter(Boolean).filter(v => v !== "{free_input}")
 
     if ((formType === "dropdown" || formType === "multiselect") && values.length === 0 && !formAllowFreeInput) {
       toast.error("At least one value is required for dropdown/multi-select, or enable free input")
@@ -458,6 +732,7 @@ export default function ConfigPage() {
       const updated = [...variables, newVariable]
       setVariables(updated)
       await saveConfig(updated)
+      setHasConfig(true)
       toast.success("Variable added")
     }
 
@@ -474,7 +749,7 @@ export default function ConfigPage() {
 
     const values = formType === "input" 
       ? [] 
-      : formValues.split(",").map(v => v.trim()).filter(Boolean)
+      : (formValues || "").split(",").map(v => v.trim()).filter(Boolean)
 
     if ((formType === "dropdown" || formType === "multiselect") && values.length === 0) {
       toast.error("At least one value is required for dropdown/multi-select")
@@ -523,8 +798,29 @@ export default function ConfigPage() {
       toast.success("Configuration locked")
     } else {
       // Unlocking requires password
+      setPendingAction("unlock")
       setPasswordDialogOpen(true)
     }
+  }
+
+  const checkPasswordAndExecute = (action: "export" | "import" | "delete" | "unlock") => {
+    setPendingAction(action)
+    setPasswordDialogOpen(true)
+  }
+
+  const executePendingAction = async () => {
+    if (pendingAction === "export") {
+      performExport()
+    } else if (pendingAction === "import") {
+      performImportClick()
+    } else if (pendingAction === "delete") {
+      setDeleteConfigDialogOpen(true)
+    } else if (pendingAction === "unlock") {
+      setLocked(false)
+      await saveConfig(undefined, undefined, undefined, false)
+      toast.success("Configuration unlocked")
+    }
+    setPendingAction(null)
   }
 
   const handlePasswordSubmit = async () => {
@@ -532,11 +828,9 @@ export default function ConfigPage() {
     const correctPassword = process.env.NEXT_PUBLIC_LOCK_PASSWORD || "signboards"
     
     if (password === correctPassword) {
-      setLocked(false)
-      await saveConfig(undefined, undefined, undefined, false)
-      toast.success("Configuration unlocked")
       setPasswordDialogOpen(false)
       setPassword("")
+      await executePendingAction()
     } else {
       toast.error("Incorrect password")
       setPassword("")
@@ -616,6 +910,211 @@ export default function ConfigPage() {
     }
   }
 
+  const handleExportConfig = () => {
+    checkPasswordAndExecute("export")
+  }
+
+  const performExport = () => {
+    const config: Config = {
+      variables,
+      caseTransform,
+      separator,
+      locked
+    }
+    const json = JSON.stringify(config, null, 2)
+    const blob = new Blob([json], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `adtax-config-${new Date().toISOString().split("T")[0]}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    setLastExportTimestamp(Date.now())
+    toast.success("Configuration exported")
+  }
+
+  const handleImportClick = () => {
+    checkPasswordAndExecute("import")
+  }
+
+  const performImportClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Check if there are unsaved changes
+    const hasUnsavedChanges = lastExportTimestamp !== null && 
+                              lastModifiedTimestamp !== null && 
+                              lastModifiedTimestamp > lastExportTimestamp
+
+    if (hasUnsavedChanges) {
+      // Show warning dialog
+      setPendingImportFile(file)
+      setImportWarningDialogOpen(true)
+    } else {
+      // No unsaved changes, proceed with import
+      performImport(file)
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  const performImport = async (file: File) => {
+    try {
+      const text = await file.text()
+      const config: Config = JSON.parse(text)
+      
+      // Validate config structure
+      if (!config || typeof config !== "object") {
+        throw new Error("Invalid configuration file")
+      }
+
+      // Validate and set config
+      setVariables(config.variables || [])
+      setCaseTransform(config.caseTransform || "lowercase")
+      setSeparator(config.separator || "_")
+      setLocked(config.locked || false)
+      setHasConfig(true)
+
+      // Initialize descriptions
+      const initialVarDescriptions: Record<string, string> = {}
+      const initialOptionDescriptions: Record<string, Record<string, string>> = {}
+      config.variables?.forEach(v => {
+        if (v.type === "dropdown" || v.type === "multiselect" || v.type === "input") {
+          initialVarDescriptions[v.id] = v.description || ""
+          initialOptionDescriptions[v.id] = v.optionDescriptions || {}
+        }
+      })
+      setVariableDescriptions(initialVarDescriptions)
+      setOptionDescriptions(initialOptionDescriptions)
+
+      // Save to storage
+      await saveConfig(config.variables, config.caseTransform, config.separator, config.locked)
+      setLastExportTimestamp(null) // Reset export timestamp since we imported
+      toast.success("Configuration imported")
+    } catch (error) {
+      console.error("Failed to import config:", error)
+      toast.error("Failed to import configuration. Please check the file format.")
+    }
+  }
+
+  const handleImportWithExport = async () => {
+    // Export first, then import
+    handleExportConfig()
+    // Small delay to ensure export completes
+    await new Promise(resolve => setTimeout(resolve, 500))
+    if (pendingImportFile) {
+      await performImport(pendingImportFile)
+    }
+    setImportWarningDialogOpen(false)
+    setPendingImportFile(null)
+  }
+
+  const handleImportWithoutExport = async () => {
+    // Import without exporting
+    if (pendingImportFile) {
+      await performImport(pendingImportFile)
+    }
+    setImportWarningDialogOpen(false)
+    setPendingImportFile(null)
+  }
+
+  const handleDeleteConfig = async () => {
+    try {
+      await storage.delete("config")
+      setVariables([])
+      setCaseTransform("lowercase")
+      setSeparator("_")
+      setLocked(false)
+      setHasConfig(false)
+      setLastExportTimestamp(null)
+      setLastModifiedTimestamp(null)
+      setVariableDescriptions({})
+      setOptionDescriptions({})
+      toast.success("Configuration deleted")
+      setDeleteConfigDialogOpen(false)
+    } catch (error) {
+      console.error("Failed to delete config:", error)
+      toast.error("Failed to delete configuration")
+    }
+  }
+
+  const handleCreateFirstConfig = () => {
+    handleAddVariable()
+  }
+
+  // Render loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background px-4 md:px-8 pb-4 md:pb-8 pt-4">
+        <div className="max-w-4xl mx-auto">
+          <Card>
+            <CardContent className="py-8">
+              <div className="text-center text-muted-foreground">Loading configuration...</div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // Render no config state
+  if (!hasConfig) {
+    return (
+      <>
+        <div className="min-h-screen bg-background px-4 md:px-8 pb-4 md:pb-8 pt-4">
+          <div className="max-w-4xl mx-auto">
+            <Card>
+              <CardContent className="py-16">
+                <div className="text-center">
+                  <div className="text-muted-foreground mb-6">
+                    No configuration available. Create your first configuration to get started.
+                  </div>
+                  <Button onClick={handleCreateFirstConfig}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Configuration
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+        <VariableDialog
+          editingId={editingId}
+          dialogOpen={dialogOpen}
+          setDialogOpen={setDialogOpen}
+          setTempVariableId={setTempVariableId}
+          setEditingId={setEditingId}
+          handleAddVariable={handleAddVariable}
+          formLabel={formLabel}
+          setFormLabel={setFormLabel}
+          formType={formType}
+          setFormType={setFormType}
+          formValues={formValues}
+          setFormValues={setFormValues}
+          formAllowFreeInput={formAllowFreeInput}
+          setFormAllowFreeInput={setFormAllowFreeInput}
+          handleNextToDescriptions={handleNextToDescriptions}
+          nextButtonRef={nextButtonRef}
+          handleSaveVariable={handleSaveVariable}
+          tempVariableId={tempVariableId}
+          variableDescriptions={variableDescriptions}
+          optionDescriptions={optionDescriptions}
+          handleUpdateVariableDescription={handleUpdateVariableDescription}
+          handleUpdateOptionDescription={handleUpdateOptionDescription}
+        />
+      </>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background px-4 md:px-8 pb-4 md:pb-8 pt-4">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -649,249 +1148,40 @@ export default function ConfigPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="border-t pt-6 space-y-6">
-              <div className="space-y-4">
-                <Label className="text-base font-semibold">Formatting Options</Label>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="case-transform">Case Transformation</Label>
-                    <Select value={caseTransform} onValueChange={handleCaseTransformChange} disabled={locked}>
-                      <SelectTrigger id="case-transform">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="uppercase">Uppercase</SelectItem>
-                        <SelectItem value="lowercase">Lowercase</SelectItem>
-                        <SelectItem value="none">None (preserve original)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      How to transform the case of variable values in the file name
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="separator">Separator Character</Label>
-                    <Input
-                      id="separator"
-                      placeholder="_"
-                      value={separator}
-                      onChange={(e) => handleSeparatorChange(e.target.value)}
-                      maxLength={1}
-                      disabled={locked}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Character used to separate words in the file name
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label className="text-base font-semibold">Variables</Label>
                 {!locked && (
-                  <DialogStack 
-                      key={editingId || "new"}
-                      open={dialogOpen} 
-                      onOpenChange={(open) => {
-                        setDialogOpen(open)
-                        if (!open) {
-                          setTempVariableId(null)
-                          setEditingId(null)
-                        }
-                      }}
-                    >
-                      {!editingId && (
-                        <DialogStackTrigger asChild>
-                          <Button onClick={handleAddVariable} size="sm">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Variable
-                          </Button>
-                        </DialogStackTrigger>
-                      )}
-                    <DialogStackOverlay />
-                    <DialogStackBody>
-                      <DialogStackContent>
-                        <DialogStackHeader>
-                          <DialogStackTitle>{editingId ? "Edit Variable" : "Add Variable"}</DialogStackTitle>
-                          <DialogStackDescription>
-                            {editingId ? "Update variable configuration" : "Configure basic variable information"}
-                          </DialogStackDescription>
-                        </DialogStackHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="var-label">Label</Label>
-                            <Input
-                              id="var-label"
-                              placeholder="e.g., Size, Persona, Funnel"
-                              value={formLabel}
-                              onChange={(e) => setFormLabel(e.target.value)}
-                            />
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <Label htmlFor="var-type">Type</Label>
-                            <Select value={formType} onValueChange={(value) => setFormType(value as VariableType)}>
-                              <SelectTrigger id="var-type">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="dropdown">Dropdown</SelectItem>
-                                <SelectItem value="multiselect">Multi-select</SelectItem>
-                                <SelectItem value="input">Input Field</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          {(formType === "dropdown" || formType === "multiselect") && (
-                            <div className="space-y-2">
-                              <Label htmlFor="var-values">Values (comma-separated)</Label>
-                              <Input
-                                id="var-values"
-                                placeholder="e.g., Option1, Option2, Option3"
-                                value={formValues}
-                                onChange={(e) => setFormValues(e.target.value)}
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                Enter values separated by commas
-                              </p>
-                              {formType === "dropdown" && (
-                                <div className="flex items-center space-x-2 pt-2">
-                                  <Checkbox
-                                    id="allow-free-input"
-                                    checked={formAllowFreeInput}
-                                    onCheckedChange={(checked) => setFormAllowFreeInput(checked === true)}
-                                  />
-                                  <Label
-                                    htmlFor="allow-free-input"
-                                    className="text-sm font-normal cursor-pointer"
-                                  >
-                                    Allow free input
-                                  </Label>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {formType === "input" && (
-                            <div className="space-y-2">
-                              <p className="text-sm text-muted-foreground">
-                                Input fields allow free text entry and don't require predefined values
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        <DialogStackFooter className="justify-between">
-                          <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                            Cancel
-                          </Button>
-                          <div className="flex gap-2">
-                            {!editingId && (
-                              <ValidatedNextButton 
-                                onValidate={handleNextToDescriptions}
-                              />
-                            )}
-                            {editingId && (
-                              <>
-                                <DialogStackNext asChild>
-                                  <button
-                                    ref={nextButtonRef}
-                                    style={{ display: 'none' }}
-                                    aria-hidden="true"
-                                    tabIndex={-1}
-                                  >
-                                    Hidden Next
-                                  </button>
-                                </DialogStackNext>
-                                <Button 
-                                  variant="outline" 
-                                  onClick={() => {
-                                    if (handleNextToDescriptions() && nextButtonRef.current) {
-                                      nextButtonRef.current.click()
-                                    }
-                                  }}
-                                >
-                                  Next
-                                </Button>
-                              </>
-                            )}
-                            {editingId && (
-                              <Button onClick={handleSaveVariable}>
-                                Save Variable
-                              </Button>
-                            )}
-                          </div>
-                        </DialogStackFooter>
-                      </DialogStackContent>
-                      <DialogStackContent>
-                        <DialogStackHeader>
-                          <DialogStackTitle>Add Descriptions (Optional)</DialogStackTitle>
-                          <DialogStackDescription>
-                            Define descriptions for this variable and its options
-                          </DialogStackDescription>
-                        </DialogStackHeader>
-                        <div className="space-y-4 py-4">
-                          {(() => {
-                            const tempId = tempVariableId || `temp-${Date.now()}`
-                            const values = formType === "input" 
-                              ? [] 
-                              : formValues.split(",").map(v => v.trim()).filter(Boolean)
-                            
-                            return (
-                              <>
-                                <div className="space-y-2">
-                                  <Label htmlFor={`var-desc-new-${tempId}`}>Description</Label>
-                                  <textarea
-                                    id={`var-desc-new-${tempId}`}
-                                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    placeholder={`What does ${formLabel || "this variable"} mean to the final file name?`}
-                                    value={variableDescriptions[tempId] || ""}
-                                    onChange={(e) => handleUpdateVariableDescription(tempId, e.target.value)}
-                                  />
-                                </div>
-
-                                {(formType === "dropdown" || formType === "multiselect") && values.length > 0 && (
-                                  <div className="space-y-3">
-                                    <Label>Option Descriptions</Label>
-                                    {values.map((option) => (
-                                      <div key={option} className="space-y-2">
-                                        <Label htmlFor={`desc-new-${tempId}-${option}`} className="text-sm font-normal">
-                                          {option}
-                                        </Label>
-                                        <Input
-                                          id={`desc-new-${tempId}-${option}`}
-                                          placeholder={`Description for ${option}`}
-                                          value={optionDescriptions[tempId]?.[option] || ""}
-                                          onChange={(e) => handleUpdateOptionDescription(tempId, option, e.target.value)}
-                                        />
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </>
-                            )
-                          })()}
-                        </div>
-                        <DialogStackFooter className="justify-between">
-                          <DialogStackPrevious asChild>
-                            <Button variant="outline">Previous</Button>
-                          </DialogStackPrevious>
-                          <Button onClick={handleSaveVariable}>
-                            {editingId ? "Save Variable" : "Create Variable"}
-                          </Button>
-                        </DialogStackFooter>
-                      </DialogStackContent>
-                    </DialogStackBody>
-                  </DialogStack>
+                  <VariableDialog
+                    editingId={editingId}
+                    dialogOpen={dialogOpen}
+                    setDialogOpen={setDialogOpen}
+                    setTempVariableId={setTempVariableId}
+                    setEditingId={setEditingId}
+                    handleAddVariable={handleAddVariable}
+                    formLabel={formLabel}
+                    setFormLabel={setFormLabel}
+                    formType={formType}
+                    setFormType={setFormType}
+                    formValues={formValues}
+                    setFormValues={setFormValues}
+                    formAllowFreeInput={formAllowFreeInput}
+                    setFormAllowFreeInput={setFormAllowFreeInput}
+                    handleNextToDescriptions={handleNextToDescriptions}
+                    nextButtonRef={nextButtonRef}
+                    handleSaveVariable={handleSaveVariable}
+                    tempVariableId={tempVariableId}
+                    variableDescriptions={variableDescriptions}
+                    optionDescriptions={optionDescriptions}
+                    handleUpdateVariableDescription={handleUpdateVariableDescription}
+                    handleUpdateOptionDescription={handleUpdateOptionDescription}
+                  />
                 )}
               </div>
 
               {variables.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground border border-dashed rounded-md">
-                  No variables configured. Click "Add Variable" to get started.
+                  No variables configured. Click &quot;Add Variable&quot; to get started.
                 </div>
               ) : locked ? (
                 <div className="space-y-2">
@@ -945,13 +1235,111 @@ export default function ConfigPage() {
               )}
             </div>
 
-            {/* Password Dialog */}
-            <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+            {/* Formatting Options */}
+            <div className="border-t pt-6 space-y-6">
+              <div className="space-y-4">
+                <Label className="text-base font-semibold">Formatting Options</Label>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="case-transform">Case Transformation</Label>
+                    <Select value={caseTransform} onValueChange={handleCaseTransformChange} disabled={locked}>
+                      <SelectTrigger id="case-transform">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="uppercase">Uppercase</SelectItem>
+                        <SelectItem value="lowercase">Lowercase</SelectItem>
+                        <SelectItem value="none">None (preserve original)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      How to transform the case of variable values in the file name
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="separator">Separator Character</Label>
+                    <Input
+                      id="separator"
+                      placeholder="_"
+                      value={separator}
+                      onChange={(e) => handleSeparatorChange(e.target.value)}
+                      maxLength={1}
+                      disabled={locked}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Character used to separate words in the file name
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Export/Import/Delete Actions */}
+        <div className="mt-6">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportConfig}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleImportClick}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Import
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileSelected}
+                    className="hidden"
+                  />
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => checkPasswordAndExecute("delete")}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Configuration
+                </Button>
+              </div>
+            </div>
+
+      {/* Password Dialog */}
+            <Dialog open={passwordDialogOpen} onOpenChange={(open) => {
+              setPasswordDialogOpen(open)
+              if (!open) {
+                setPassword("")
+                setPendingAction(null)
+              }
+            }}>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>{locked ? "Unlock Configuration" : "Lock Configuration"}</DialogTitle>
+                  <DialogTitle>
+                    {pendingAction === "unlock" ? "Unlock Configuration" : 
+                     pendingAction === "export" ? "Export Configuration" :
+                     pendingAction === "import" ? "Import Configuration" :
+                     pendingAction === "delete" ? "Delete Configuration" :
+                     "Enter Password"}
+                  </DialogTitle>
                   <DialogDescription>
-                    Enter password to {locked ? "unlock" : "lock"} the configuration
+                    {pendingAction === "unlock" ? "Enter password to unlock the configuration" :
+                     pendingAction === "export" ? "Enter password to export the configuration" :
+                     pendingAction === "import" ? "Enter password to import a configuration" :
+                     pendingAction === "delete" ? "Enter password to delete the configuration" :
+                     "Enter password to continue"}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -981,6 +1369,44 @@ export default function ConfigPage() {
                   </Button>
                   <Button onClick={handlePasswordSubmit}>
                     {locked ? "Unlock" : "Lock"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Import Warning Dialog */}
+            <Dialog open={importWarningDialogOpen} onOpenChange={setImportWarningDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Import Configuration</DialogTitle>
+                  <DialogDescription>
+                    You have unsaved changes that will be lost if you import a new configuration.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <p className="text-sm text-muted-foreground">
+                    Your current configuration has been modified since the last export. 
+                    Would you like to export it first before importing the new configuration?
+                  </p>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setImportWarningDialogOpen(false)
+                      setPendingImportFile(null)
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleImportWithoutExport}
+                  >
+                    Import Without Exporting
+                  </Button>
+                  <Button onClick={handleImportWithExport}>
+                    Export First, Then Import
                   </Button>
                 </div>
               </DialogContent>
@@ -1041,8 +1467,6 @@ export default function ConfigPage() {
                 )}
               </DialogContent>
             </Dialog>
-          </CardContent>
-        </Card>
       </div>
     </div>
   )

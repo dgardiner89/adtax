@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { FileText, Settings } from "lucide-react"
+import { FileText, Settings, BarChart3 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export function Navigation() {
@@ -30,6 +30,16 @@ export function Navigation() {
         >
           <Settings className="h-4 w-4" />
           Configuration
+        </Link>
+        <Link
+          href="/admix"
+          className={cn(
+            "text-sm font-medium transition-colors hover:text-primary flex items-center gap-2",
+            pathname === "/admix" ? "text-foreground" : "text-muted-foreground"
+          )}
+        >
+          <BarChart3 className="h-4 w-4" />
+          Ad Mix
         </Link>
         <Link
           href="/about"

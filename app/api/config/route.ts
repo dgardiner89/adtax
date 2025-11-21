@@ -47,3 +47,27 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function DELETE(request: NextRequest) {
+  try {
+    const sessionId = request.headers.get("x-session-id")
+    if (!sessionId) {
+      return NextResponse.json(
+        { error: "Session ID required" },
+        { status: 400 }
+      )
+    }
+
+    const key = `config:${sessionId}`
+    await kv.del(key)
+    
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Error deleting config:", error)
+    const errorMessage = error instanceof Error ? error.message : "Failed to delete config"
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: 500 }
+    )
+  }
+}
+

@@ -76,6 +76,7 @@ interface GeneratedName {
 
 export default function Home() {
   const [config, setConfig] = useState<Config | null>(null)
+  const [isLoadingConfig, setIsLoadingConfig] = useState(true)
   const [variableValues, setVariableValues] = useState<Record<string, string | string[]>>({})
   const [popoverOpen, setPopoverOpen] = useState<Record<string, boolean>>({})
   const [generatedNames, setGeneratedNames] = useState<GeneratedName[]>([])
@@ -121,6 +122,7 @@ export default function Home() {
   // Load config
   useEffect(() => {
     const loadConfig = async () => {
+      setIsLoadingConfig(true)
       try {
         const stored = await storage.get<Config>("config")
         if (stored) {
@@ -138,6 +140,8 @@ export default function Home() {
         }
       } catch (e) {
         console.error("Failed to load config:", e)
+      } finally {
+        setIsLoadingConfig(false)
       }
     }
     
@@ -686,9 +690,19 @@ export default function Home() {
             </div>
           </CardHeader>
           <CardContent>
-            {!config ? (
+            {isLoadingConfig ? (
               <div className="text-center py-8 text-muted-foreground">
                 Loading configuration...
+              </div>
+            ) : !config ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground mb-6">No configuration available.</p>
+                <Link href="/config">
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Configuration
+                  </Button>
+                </Link>
               </div>
             ) : config.variables.length === 0 ? (
               <div className="text-center py-8 space-y-4">
@@ -975,7 +989,7 @@ export default function Home() {
           <DialogHeader>
             <DialogTitle>Clear all generated names?</DialogTitle>
             <DialogDescription>
-              This will permanently remove every saved file name. You'll need to re-enter your password to continue.
+              This will permanently remove every saved file name. You&apos;ll need to re-enter your password to continue.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

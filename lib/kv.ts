@@ -1,10 +1,14 @@
 import { Redis } from "@upstash/redis"
 
-// Initialize Upstash Redis client
+// Initialize Upstash Redis client lazily
 // Environment variables: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
-let redis: Redis
+let redis: Redis | null = null
 
-try {
+function getRedis(): Redis {
+  if (redis) {
+    return redis
+  }
+
   const url = process.env.UPSTASH_REDIS_REST_URL?.trim()
   const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim()
 
@@ -16,12 +20,23 @@ try {
     url,
     token,
   })
-} catch (error) {
-  console.error("Failed to initialize Upstash Redis:", error)
-  throw error
+
+  return redis
 }
+
+// Create a proxy object that lazily initializes Redis and forwards method calls
+const kv = new Proxy({} as Redis, {
+  get(_target, prop) {
+    const redisInstance = getRedis()
+    const value = (redisInstance as any)[prop]
+    if (typeof value === 'function') {
+      return value.bind(redisInstance)
+    }
+    return value
+  }
+})
 
 // Export redis client for use in API routes
 // This file centralizes Redis initialization for easy migration to Supabase later
-export { redis as kv }
+export { kv }
 

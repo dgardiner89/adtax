@@ -50,7 +50,7 @@ export function Footer() {
                 <a href="https://www.clipflow.co" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
                   Clipflow
                 </a>
-                . It's not safe for use for any actual business. Proceed at your own risk.
+                . It&apos;s not safe for use for any actual business. Proceed at your own risk.
               </p>
             </div>
           </div>
