@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { storage } from "@/lib/storage"
 import type { Config, Variable } from "@/lib/types"
@@ -64,7 +64,7 @@ export default function AdMixPage() {
   }
 
   // Helper to match a file name part to a variable option
-  const matchToOption = (part: string, options: string[], caseTransform: string, separator: string): string | null => {
+  const matchToOption = useCallback((part: string, options: string[], caseTransform: string, separator: string): string | null => {
     const normalizedPart = normalizeForMatch(part)
     
     // Try exact match first
@@ -109,10 +109,10 @@ export default function AdMixPage() {
     }
 
     return null
-  }
+  }, [])
 
   // Parse file name when metadata is missing or incomplete
-  const parseFileName = (fileName: string, config: Config): Record<string, string> => {
+  const parseFileName = useCallback((fileName: string, config: Config): Record<string, string> => {
     const parts = fileName.split(config.separator)
     const parsed: Record<string, string> = {}
     
@@ -136,7 +136,7 @@ export default function AdMixPage() {
     })
 
     return parsed
-  }
+  }, [matchToOption])
 
   useEffect(() => {
     if (!config || generatedNames.length === 0) {
@@ -225,7 +225,7 @@ export default function AdMixPage() {
       .sort((a, b) => b.totalUsage - a.totalUsage)
 
     setStats(statsArray)
-  }, [config, generatedNames])
+  }, [config, generatedNames, matchToOption, parseFileName])
 
   const getMostUsedOption = (optionCounts: Record<string, number>): { option: string; count: number } | null => {
     const entries = Object.entries(optionCounts)
