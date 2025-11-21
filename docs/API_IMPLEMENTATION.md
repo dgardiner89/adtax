@@ -78,11 +78,31 @@ Headers:
         "id": "1",
         "label": "Size",
         "type": "dropdown",
-        "values": ["1080x1080", "1080x1350", "1920x1080"],
+        "values": ["1080x1080", "1080x1350", "1080x1920", "1920x1080", "1200x628"],
         "description": "The dimensions of the ad creative",
         "optionDescriptions": {
-          "1080x1080": "Square format, ideal for Instagram feed"
+          "1080x1080": "Square format, ideal for Instagram feed",
+          "1080x1350": "Portrait format, good for Instagram Stories"
+        },
+        "allowFreeInput": false
+      },
+      {
+        "id": "4",
+        "label": "Archetype",
+        "type": "multiselect",
+        "values": ["Hero", "Sage", "Outlaw", "Explorer"],
+        "description": "Brand archetype(s) represented in the ad",
+        "optionDescriptions": {
+          "Hero": "Overcomes challenges and adversity",
+          "Sage": "Seeks truth and wisdom"
         }
+      },
+      {
+        "id": "8",
+        "label": "Ad Description",
+        "type": "input",
+        "values": [],
+        "description": "Brief description of the ad content"
       }
     ],
     "caseTransform": "lowercase",
@@ -91,6 +111,20 @@ Headers:
   }
 }
 ```
+
+**Note:** The API returns the **actual configured values** for your session. The example above shows the structure - your actual response will contain:
+- The variables you've configured (via `/config` page or `POST /api/config`)
+- The exact `id`, `label`, `type`, `values`, `description`, `optionDescriptions`, and `allowFreeInput` settings you've set
+- Your configured `caseTransform` and `separator` settings
+
+**Variable Properties:**
+- `id` - Unique identifier (set when creating the variable)
+- `label` - Display name (configured by user)
+- `type` - `"dropdown"` | `"multiselect"` | `"input"` (configured by user)
+- `values` - Array of option strings (configured by user, empty for `input` type)
+- `description` - Optional description of the variable (configured by user)
+- `optionDescriptions` - Optional object mapping option values to descriptions (configured by user)
+- `allowFreeInput` - Optional boolean (only for `dropdown` type, configured by user)
 
 **No Config (200 OK):**
 ```json
@@ -116,8 +150,10 @@ Headers:
 **Implementation Details:**
 - Key: `config:${sessionId}`
 - Returns `null` if session ID missing or config not found
+- Returns the **complete configuration** as stored (all variables with their types, values, descriptions, etc.)
 - Includes CORS headers for Figma plugin
 - If `x-api-key` provided, validates key and tracks usage
+- **The response contains exactly what you've configured** - no hardcoded values
 
 ---
 
@@ -203,6 +239,18 @@ Headers:
 Body:
 {
   "variableValues": {
+    "<variable-id-1>": "<selected-value>",
+    "<variable-id-2>": "<selected-value>",
+    "<variable-id-3>": ["<value1>", "<value2>"],
+    "<variable-id-4>": "<free-text-input>"
+  }
+}
+```
+
+**Example Request:**
+```json
+{
+  "variableValues": {
     "1": "1080x1080",
     "2": "Creator",
     "3": "Cold",
@@ -221,6 +269,12 @@ Body:
   "fileName": "1080x1080_creator_cold_hero_problem_learn_more_minimalist_summer_campaign"
 }
 ```
+
+**Note:** 
+- Use the actual `id` values from your configured variables (from `GET /api/config`)
+- For `dropdown` and `input` types, provide a string value
+- For `multiselect` type, provide an array of selected values
+- The generated filename uses your configured `caseTransform` and `separator` settings
 
 **Error (400):**
 ```json
@@ -265,9 +319,12 @@ Body:
 
 **Implementation Details:**
 - Key: `config:${sessionId}` (to retrieve config)
+- Uses the **actual configured variables** from your session's config
+- Processes variables in the order they appear in your configuration
 - Supports CORS for Figma plugin
 - Handles free input for dropdowns via `${variable.id}_free` key
 - Returns empty string if no valid parts generated
+- The `variableValues` object keys must match the `id` values from your configured variables
 
 ---
 

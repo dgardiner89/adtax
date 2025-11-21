@@ -5,13 +5,7 @@ import {
   hashApiKey,
   type ApiKeyData,
 } from "@/lib/api-key-auth"
-
-// CORS headers for API key endpoints
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-api-key",
-}
+import { corsHeaders } from "@/lib/cors"
 
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders })

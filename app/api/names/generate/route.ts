@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { kv } from "@/lib/kv"
-import { validateApiKey } from "@/lib/api-key-auth"
+import { validateApiKey, generateApiKey, hashApiKey, type ApiKeyData } from "@/lib/api-key-auth"
+import { corsHeaders } from "@/lib/cors"
 import type { Config, Variable } from "@/lib/types"
-
-// CORS headers for Figma plugin
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-session-id, x-api-key",
-}
 
 function transformValue(value: string, caseTransform: string): string {
   switch (caseTransform) {
@@ -78,7 +72,32 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const sessionId = request.headers.get("x-session-id") || request.nextUrl.searchParams.get("sessionId")
-    const apiKey = request.headers.get("x-api-key")
+    let apiKey = request.headers.get("x-api-key")
+    const autoCreateKey = request.headers.get("x-auto-create-key") === "true"
+
+    let newApiKey: string | undefined
+
+    // Auto-create API key if requested and none provided
+    if (autoCreateKey && !apiKey) {
+      newApiKey = generateApiKey("live")
+      const keyHash = hashApiKey(newApiKey)
+      const keyId = `key_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+
+      const keyData: ApiKeyData = {
+        keyId,
+        name: `Auto-generated for session ${sessionId?.substring(0, 20)}`,
+        environment: "live",
+        createdAt: new Date().toISOString(),
+        lastUsed: null,
+        usageCount: 0,
+      }
+
+      await kv.set(`api_key:${keyHash}`, keyData, { ex: 31536000 })
+      await kv.set(`key_meta:${keyId}`, keyData, { ex: 31536000 })
+      await kv.sadd("api_keys:all", keyId)
+
+      apiKey = newApiKey
+    }
 
     // Validate API key if provided
     if (apiKey) {
@@ -128,9 +147,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const response: { fileName: string; apiKey?: string } = { fileName }
+    
+    // Include new API key in response if auto-created
+    if (newApiKey) {
+      response.apiKey = newApiKey
+    }
+
+    const responseHeaders = { ...corsHeaders }
+    if (newApiKey) {
+      responseHeaders["X-New-Api-Key"] = newApiKey
+    }
+
     return NextResponse.json(
-      { fileName },
-      { headers: corsHeaders }
+      response,
+      { headers: responseHeaders }
     )
   } catch (error) {
     console.error("Error generating filename:", error)

@@ -27,7 +27,7 @@ import {
   DialogStackTitle,
   DialogStackTrigger,
 } from "@/components/ui/shadcn-io/dialog-stack"
-import { Trash2, Plus, Edit2, X as XIcon, GripVertical, Info, Lock, Unlock, Download, Upload, AlertTriangle } from "lucide-react"
+import { Trash2, Plus, Edit2, X as XIcon, GripVertical, Info, Lock, Unlock, Download, Upload, AlertTriangle, Key, Copy, Eye, EyeOff } from "lucide-react"
 import { toast } from "sonner"
 import { storage } from "@/lib/storage"
 import type { Config, Variable, VariableType } from "@/lib/types"
@@ -491,12 +491,26 @@ export default function ConfigPage() {
   const [tempVariableId, setTempVariableId] = useState<string | null>(null)
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
   const [password, setPassword] = useState("")
-  const [pendingAction, setPendingAction] = useState<"export" | "import" | "delete" | "unlock" | null>(null)
+  const [pendingAction, setPendingAction] = useState<"export" | "import" | "delete" | "unlock" | "createKey" | null>(null)
   const [lastExportTimestamp, setLastExportTimestamp] = useState<number | null>(null)
   const [lastModifiedTimestamp, setLastModifiedTimestamp] = useState<number | null>(null)
   const [importWarningDialogOpen, setImportWarningDialogOpen] = useState(false)
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null)
   const [deleteConfigDialogOpen, setDeleteConfigDialogOpen] = useState(false)
+  const [apiKeys, setApiKeys] = useState<Array<{
+    keyId: string
+    name: string
+    environment: "live" | "test"
+    createdAt: string
+    lastUsed: string | null
+    usageCount: number
+  }>>([])
+  const [apiKeysLoading, setApiKeysLoading] = useState(false)
+  const [createKeyDialogOpen, setCreateKeyDialogOpen] = useState(false)
+  const [newKeyName, setNewKeyName] = useState("")
+  const [newKeyEnvironment, setNewKeyEnvironment] = useState<"live" | "test">("live")
+  const [newKeyCreated, setNewKeyCreated] = useState<{ apiKey: string; keyId: string } | null>(null)
+  const [showApiKey, setShowApiKey] = useState(false)
   
   // Form state for new/editing variable
   const [formLabel, setFormLabel] = useState("")
@@ -803,7 +817,7 @@ export default function ConfigPage() {
     }
   }
 
-  const checkPasswordAndExecute = (action: "export" | "import" | "delete" | "unlock") => {
+  const checkPasswordAndExecute = (action: "export" | "import" | "delete" | "unlock" | "createKey") => {
     setPendingAction(action)
     setPasswordDialogOpen(true)
   }
@@ -819,6 +833,8 @@ export default function ConfigPage() {
       setLocked(false)
       await saveConfig(undefined, undefined, undefined, false)
       toast.success("Configuration unlocked")
+    } else if (pendingAction === "createKey") {
+      setCreateKeyDialogOpen(true)
     }
     setPendingAction(null)
   }
@@ -1049,6 +1065,85 @@ export default function ConfigPage() {
 
   const handleCreateFirstConfig = () => {
     handleAddVariable()
+  }
+
+  // Load API keys
+  const loadApiKeys = async () => {
+    setApiKeysLoading(true)
+    try {
+      const response = await fetch("/api/keys")
+      if (response.ok) {
+        const data = await response.json()
+        setApiKeys(data.keys || [])
+      }
+    } catch (error) {
+      console.error("Failed to load API keys:", error)
+    } finally {
+      setApiKeysLoading(false)
+    }
+  }
+
+  // Load API keys on mount
+  useEffect(() => {
+    loadApiKeys()
+  }, [])
+
+  // Create API key
+  const handleCreateApiKey = async () => {
+    if (!newKeyName.trim()) {
+      toast.error("Key name is required")
+      return
+    }
+
+    try {
+      const response = await fetch("/api/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newKeyName.trim(),
+          environment: newKeyEnvironment,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setNewKeyCreated({ apiKey: data.apiKey, keyId: data.keyId })
+        setNewKeyName("")
+        await loadApiKeys()
+        toast.success("API key created")
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Failed to create API key")
+      }
+    } catch (error) {
+      console.error("Failed to create API key:", error)
+      toast.error("Failed to create API key")
+    }
+  }
+
+  // Delete API key
+  const handleDeleteApiKey = async (keyId: string) => {
+    try {
+      const response = await fetch(`/api/keys/${keyId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        await loadApiKeys()
+        toast.success("API key deleted")
+      } else {
+        toast.error("Failed to delete API key")
+      }
+    } catch (error) {
+      console.error("Failed to delete API key:", error)
+      toast.error("Failed to delete API key")
+    }
+  }
+
+  // Copy API key to clipboard
+  const handleCopyApiKey = (apiKey: string) => {
+    navigator.clipboard.writeText(apiKey)
+    toast.success("API key copied to clipboard")
   }
 
   // Render loading state
@@ -1317,6 +1412,193 @@ export default function ConfigPage() {
               </div>
             </div>
 
+        {/* API Keys Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle>API Keys</CardTitle>
+                <CardDescription>
+                  Manage API keys for accessing the AdTax API
+                </CardDescription>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => checkPasswordAndExecute("createKey")}
+              >
+                <Key className="h-4 w-4 mr-2" />
+                Create API Key
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {apiKeysLoading ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Loading API keys...
+              </div>
+            ) : apiKeys.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground border border-dashed rounded-md">
+                No API keys created yet. Click &quot;Create API Key&quot; to get started.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {apiKeys.map((key) => (
+                  <div
+                    key={key.keyId}
+                    className="flex items-center justify-between p-4 border rounded-md bg-background"
+                  >
+                    <div className="flex-1">
+                      <div className="font-medium">{key.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {key.environment === "live" ? (
+                          <span className="text-green-600">Live</span>
+                        ) : (
+                          <span className="text-yellow-600">Test</span>
+                        )}
+                        {" • "}
+                        Created: {new Date(key.createdAt).toLocaleDateString()}
+                        {key.lastUsed && (
+                          <>
+                            {" • "}
+                            Last used: {new Date(key.lastUsed).toLocaleDateString()}
+                          </>
+                        )}
+                        {" • "}
+                        Used {key.usageCount} {key.usageCount === 1 ? "time" : "times"}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteApiKey(key.keyId)}
+                      className="text-destructive hover:text-destructive"
+                      title="Delete API key"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Create API Key Dialog */}
+        <Dialog
+          open={createKeyDialogOpen}
+          onOpenChange={(open) => {
+            setCreateKeyDialogOpen(open)
+            if (!open) {
+              setNewKeyName("")
+              setNewKeyEnvironment("live")
+              setNewKeyCreated(null)
+              setShowApiKey(false)
+            }
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Create API Key</DialogTitle>
+              <DialogDescription>
+                {newKeyCreated
+                  ? "Save this API key securely. You won't be able to see it again."
+                  : "Create a new API key for accessing the AdTax API"}
+              </DialogDescription>
+            </DialogHeader>
+            {newKeyCreated ? (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>API Key</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type={showApiKey ? "text" : "password"}
+                      value={newKeyCreated.apiKey}
+                      readOnly
+                      className="font-mono text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                    >
+                      {showApiKey ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => handleCopyApiKey(newKeyCreated.apiKey)}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Copy this key now. It won&apos;t be shown again.
+                  </p>
+                </div>
+                <div className="flex justify-end">
+                  <Button onClick={() => {
+                    setCreateKeyDialogOpen(false)
+                    setNewKeyCreated(null)
+                    setShowApiKey(false)
+                  }}>
+                    Done
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="key-name">Key Name</Label>
+                  <Input
+                    id="key-name"
+                    placeholder="e.g., Figma Plugin Key"
+                    value={newKeyName}
+                    onChange={(e) => setNewKeyName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newKeyName.trim()) {
+                        handleCreateApiKey()
+                      }
+                    }}
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="key-environment">Environment</Label>
+                  <Select
+                    value={newKeyEnvironment}
+                    onValueChange={(value) =>
+                      setNewKeyEnvironment(value as "live" | "test")
+                    }
+                  >
+                    <SelectTrigger id="key-environment">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="live">Live</SelectItem>
+                      <SelectItem value="test">Test</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCreateKeyDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleCreateApiKey} disabled={!newKeyName.trim()}>
+                    Create Key
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
       {/* Password Dialog */}
             <Dialog open={passwordDialogOpen} onOpenChange={(open) => {
               setPasswordDialogOpen(open)
@@ -1332,6 +1614,7 @@ export default function ConfigPage() {
                      pendingAction === "export" ? "Export Configuration" :
                      pendingAction === "import" ? "Import Configuration" :
                      pendingAction === "delete" ? "Delete Configuration" :
+                     pendingAction === "createKey" ? "Create API Key" :
                      "Enter Password"}
                   </DialogTitle>
                   <DialogDescription>
@@ -1339,6 +1622,7 @@ export default function ConfigPage() {
                      pendingAction === "export" ? "Enter password to export the configuration" :
                      pendingAction === "import" ? "Enter password to import a configuration" :
                      pendingAction === "delete" ? "Enter password to delete the configuration" :
+                     pendingAction === "createKey" ? "Enter password to create an API key" :
                      "Enter password to continue"}
                   </DialogDescription>
                 </DialogHeader>

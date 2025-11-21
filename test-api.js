@@ -14,12 +14,41 @@ async function testAPI() {
   console.log(`Base URL: ${BASE_URL}`);
   console.log(`Session ID: ${SESSION_ID}\n`);
 
+  // First, check if server is running with timeout
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    const healthCheck = await fetch(`${BASE_URL}/api/config`, {
+      method: "GET",
+      headers: { "x-session-id": "health-check" },
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+  } catch (error) {
+    if (error.name === "AbortError" || error.code === "ECONNREFUSED" || error.message.includes("fetch failed") || error.message.includes("network")) {
+      console.error("❌ Error: Cannot connect to server");
+      console.error("\nMake sure:");
+      console.error("1. Dev server is running: npm run dev");
+      console.error("2. Server is accessible at", BASE_URL);
+      console.error("3. Check if port 3000 is in use: lsof -i :3000");
+      process.exit(1);
+    }
+    throw error;
+  }
+
   try {
     // Test 1: Get config (should return null initially)
     console.log("1️⃣  Testing GET /api/config (should return null)...");
     const getConfig1 = await fetch(`${BASE_URL}/api/config`, {
       headers: { "x-session-id": SESSION_ID },
     });
+    
+    if (!getConfig1.ok) {
+      throw new Error(`HTTP ${getConfig1.status}: ${getConfig1.statusText}`);
+    }
+    
     const config1 = await getConfig1.json();
     console.log(JSON.stringify(config1, null, 2));
     console.log("");
@@ -33,6 +62,11 @@ async function testAPI() {
         "x-session-id": SESSION_ID,
       },
     });
+    
+    if (!seedResponse.ok) {
+      throw new Error(`HTTP ${seedResponse.status}: ${seedResponse.statusText}`);
+    }
+    
     const seedResult = await seedResponse.json();
     console.log(JSON.stringify(seedResult, null, 2));
     console.log("");
@@ -42,6 +76,11 @@ async function testAPI() {
     const getConfig2 = await fetch(`${BASE_URL}/api/config`, {
       headers: { "x-session-id": SESSION_ID },
     });
+    
+    if (!getConfig2.ok) {
+      throw new Error(`HTTP ${getConfig2.status}: ${getConfig2.statusText}`);
+    }
+    
     const config2 = await getConfig2.json();
     if (config2.value) {
       console.log(`✅ Config found with ${config2.value.variables.length} variables`);
@@ -73,6 +112,12 @@ async function testAPI() {
         },
       }),
     });
+    
+    if (!generateResponse.ok) {
+      const errorText = await generateResponse.text();
+      throw new Error(`HTTP ${generateResponse.status}: ${errorText}`);
+    }
+    
     const generateResult = await generateResponse.json();
     console.log(JSON.stringify(generateResult, null, 2));
     if (generateResult.fileName) {
@@ -91,6 +136,7 @@ async function testAPI() {
         "Access-Control-Request-Headers": "x-session-id",
       },
     });
+    
     const corsHeaders = {
       "access-control-allow-origin": optionsResponse.headers.get(
         "access-control-allow-origin"
@@ -103,6 +149,11 @@ async function testAPI() {
       ),
     };
     console.log(JSON.stringify(corsHeaders, null, 2));
+    if (corsHeaders["access-control-allow-origin"]) {
+      console.log("✅ CORS headers present");
+    } else {
+      console.log("⚠️  CORS headers missing");
+    }
     console.log("");
 
     console.log("✅ Testing complete!");
@@ -110,9 +161,14 @@ async function testAPI() {
     console.log(`SESSION_ID=my-session node test-api.js`);
   } catch (error) {
     console.error("❌ Error:", error.message);
-    console.error("\nMake sure:");
-    console.error("1. Dev server is running: npm run dev");
-    console.error("2. .env.local has UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN");
+    if (error.cause) {
+      console.error("   Cause:", error.cause);
+    }
+    console.error("\nTroubleshooting:");
+    console.error("1. Is dev server running? Check: npm run dev");
+    console.error("2. Is server accessible? Try: curl", `${BASE_URL}/api/config`);
+    console.error("3. Check .env.local has UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN");
+    console.error("4. Check server terminal for error messages");
     process.exit(1);
   }
 }

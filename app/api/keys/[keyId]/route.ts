@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { kv } from "@/lib/kv"
 import type { ApiKeyData } from "@/lib/api-key-auth"
-
-// CORS headers
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-api-key",
-}
+import { corsHeaders } from "@/lib/cors"
 
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders })
