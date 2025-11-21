@@ -5,6 +5,7 @@ import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useEffect, useState } from "react"
 
 const SkullAndCrossbones = ({ className }: { className?: string }) => (
   <svg
@@ -32,6 +33,40 @@ const SkullAndCrossbones = ({ className }: { className?: string }) => (
 
 export function Footer() {
   const { theme, setTheme } = useTheme()
+  const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking")
+
+  useEffect(() => {
+    const checkApiStatus = async () => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+      try {
+        const response = await fetch("/api/config", {
+          method: "GET",
+          headers: {
+            "x-session-id": "status-check",
+          },
+          signal: controller.signal,
+        })
+        
+        clearTimeout(timeoutId)
+        
+        if (response.ok) {
+          setApiStatus("online")
+        } else {
+          setApiStatus("offline")
+        }
+      } catch (error) {
+        clearTimeout(timeoutId)
+        setApiStatus("offline")
+      }
+    }
+
+    checkApiStatus()
+    // Check every 30 seconds
+    const interval = setInterval(checkApiStatus, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <footer className="bg-background w-full border-t mt-auto p-4 md:p-8">
@@ -70,8 +105,30 @@ export function Footer() {
           </div>
         </div>
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t">
-          <div className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Darrell Gardiner
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-muted-foreground">
+              © {new Date().getFullYear()} Darrell Gardiner
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>API Status</span>
+              <div className="relative">
+                <div
+                  className={cn(
+                    "h-2 w-2 rounded-full transition-colors",
+                    apiStatus === "online" && "bg-green-500",
+                    apiStatus === "offline" && "bg-red-500",
+                    apiStatus === "checking" && "bg-yellow-500 animate-pulse"
+                  )}
+                  title={
+                    apiStatus === "online"
+                      ? "API is online"
+                      : apiStatus === "offline"
+                      ? "API is offline"
+                      : "Checking API status..."
+                  }
+                />
+              </div>
+            </div>
           </div>
           <Button
             variant="ghost"
