@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { kv } from "@/lib/kv"
+import { validateApiKey } from "@/lib/api-key-auth"
 import type { Config, Variable } from "@/lib/types"
 
 // CORS headers for Figma plugin
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-session-id",
+  "Access-Control-Allow-Headers": "Content-Type, x-session-id, x-api-key",
 }
 
 function transformValue(value: string, caseTransform: string): string {
@@ -77,6 +78,18 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const sessionId = request.headers.get("x-session-id") || request.nextUrl.searchParams.get("sessionId")
+    const apiKey = request.headers.get("x-api-key")
+
+    // Validate API key if provided
+    if (apiKey) {
+      const keyValidation = await validateApiKey(apiKey)
+      if (!keyValidation.valid) {
+        return NextResponse.json(
+          { error: "Invalid API key" },
+          { status: 401, headers: corsHeaders }
+        )
+      }
+    }
     
     if (!sessionId) {
       return NextResponse.json(

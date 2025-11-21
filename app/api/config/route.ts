@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { kv } from "@/lib/kv"
+import { validateApiKey } from "@/lib/api-key-auth"
 
 // CORS headers for Figma plugin
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-session-id",
+  "Access-Control-Allow-Headers": "Content-Type, x-session-id, x-api-key",
 }
 
 export async function OPTIONS() {
@@ -15,6 +16,19 @@ export async function OPTIONS() {
 export async function GET(request: NextRequest) {
   try {
     const sessionId = request.headers.get("x-session-id")
+    const apiKey = request.headers.get("x-api-key")
+
+    // Validate API key if provided
+    if (apiKey) {
+      const keyValidation = await validateApiKey(apiKey)
+      if (!keyValidation.valid) {
+        return NextResponse.json(
+          { error: "Invalid API key" },
+          { status: 401, headers: corsHeaders }
+        )
+      }
+    }
+
     if (!sessionId) {
       return NextResponse.json({ value: null }, { status: 200, headers: corsHeaders })
     }
@@ -35,6 +49,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const sessionId = request.headers.get("x-session-id")
+    const apiKey = request.headers.get("x-api-key")
+
+    // Validate API key if provided
+    if (apiKey) {
+      const keyValidation = await validateApiKey(apiKey)
+      if (!keyValidation.valid) {
+        return NextResponse.json(
+          { error: "Invalid API key" },
+          { status: 401, headers: corsHeaders }
+        )
+      }
+    }
+
     if (!sessionId) {
       return NextResponse.json(
         { error: "Session ID required" },
@@ -61,6 +88,19 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const sessionId = request.headers.get("x-session-id")
+    const apiKey = request.headers.get("x-api-key")
+
+    // Validate API key if provided
+    if (apiKey) {
+      const keyValidation = await validateApiKey(apiKey)
+      if (!keyValidation.valid) {
+        return NextResponse.json(
+          { error: "Invalid API key" },
+          { status: 401, headers: corsHeaders }
+        )
+      }
+    }
+
     if (!sessionId) {
       return NextResponse.json(
         { error: "Session ID required" },
