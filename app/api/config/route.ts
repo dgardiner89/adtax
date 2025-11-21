@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
     const sessionId = request.headers.get("x-session-id")
     const apiKey = request.headers.get("x-api-key")
 
+    let keyId: string | undefined
+
     // Validate API key if provided
     if (apiKey) {
       const keyValidation = await validateApiKey(apiKey)
@@ -21,8 +23,18 @@ export async function GET(request: NextRequest) {
           { status: 401, headers: corsHeaders }
         )
       }
+      keyId = keyValidation.keyId
     }
 
+    // If API key provided, try to get key-linked config first
+    if (keyId) {
+      const keyConfig = await kv.get(`config:api_key:${keyId}`)
+      if (keyConfig) {
+        return NextResponse.json({ value: keyConfig }, { headers: corsHeaders })
+      }
+    }
+
+    // Fall back to session-based config
     if (!sessionId) {
       return NextResponse.json({ value: null }, { status: 200, headers: corsHeaders })
     }

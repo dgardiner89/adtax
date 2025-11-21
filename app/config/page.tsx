@@ -27,9 +27,10 @@ import {
   DialogStackTitle,
   DialogStackTrigger,
 } from "@/components/ui/shadcn-io/dialog-stack"
-import { Trash2, Plus, Edit2, X as XIcon, GripVertical, Info, Lock, Unlock, Download, Upload, AlertTriangle, Key, Copy, Eye, EyeOff } from "lucide-react"
+import { Trash2, Plus, Edit2, X as XIcon, GripVertical, Info, Lock, Unlock, Download, Upload, AlertTriangle, Key, Copy, Eye, EyeOff, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { storage } from "@/lib/storage"
+import { getSessionId } from "@/lib/session"
 import type { Config, Variable, VariableType } from "@/lib/types"
 import {
   DndContext,
@@ -1146,6 +1147,30 @@ export default function ConfigPage() {
     toast.success("API key copied to clipboard")
   }
 
+  // Sync config to API key
+  const handleSyncConfigToKey = async (keyId: string) => {
+    try {
+      const sessionId = getSessionId()
+      const response = await fetch(`/api/keys/${keyId}/sync-config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-session-id": sessionId,
+        },
+      })
+
+      if (response.ok) {
+        toast.success("Configuration synced to API key")
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Failed to sync configuration")
+      }
+    } catch (error) {
+      console.error("Failed to sync config to API key:", error)
+      toast.error("Failed to sync configuration")
+    }
+  }
+
   // Render loading state
   if (isLoading) {
     return (
@@ -1467,15 +1492,25 @@ export default function ConfigPage() {
                         Used {key.usageCount} {key.usageCount === 1 ? "time" : "times"}
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteApiKey(key.keyId)}
-                      className="text-destructive hover:text-destructive"
-                      title="Delete API key"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleSyncConfigToKey(key.keyId)}
+                        title="Sync current configuration to this API key"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteApiKey(key.keyId)}
+                        className="text-destructive hover:text-destructive"
+                        title="Delete API key"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
