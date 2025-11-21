@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // Get all key IDs
-    const keyIds = await kv.smembers<string>("api_keys:all")
+    const keyIds = (await kv.smembers("api_keys:all")) as string[]
 
     if (!keyIds || keyIds.length === 0) {
       return NextResponse.json({ keys: [] }, { headers: corsHeaders })
