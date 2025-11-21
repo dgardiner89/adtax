@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
       response.apiKey = newApiKey
     }
 
-    const responseHeaders = { ...corsHeaders }
+    const responseHeaders: Record<string, string> = { ...corsHeaders }
     if (newApiKey) {
       responseHeaders["X-New-Api-Key"] = newApiKey
     }
