@@ -73,3 +73,82 @@ The app will automatically migrate data from localStorage to Redis on first load
 - **Session Management**: Client-side session IDs stored in localStorage
 - **API Routes**: Next.js API routes handle all storage operations
 
+## Testing the API Locally
+
+### Prerequisites
+
+1. Start the dev server: `npm run dev`
+2. Ensure `.env.local` has your Upstash credentials (see Setup above)
+
+### Quick Test Script
+
+Run the automated test script:
+
+```bash
+./test-api.sh
+```
+
+This will test:
+- GET /api/config
+- POST /api/seed (creates example config)
+- GET /api/config (verifies config was saved)
+- POST /api/names/generate (generates a filename)
+- CORS headers
+
+### Manual Testing with cURL
+
+**1. Get config (should return null initially):**
+```bash
+curl -H "x-session-id: test-123" http://localhost:3000/api/config
+```
+
+**2. Seed example config:**
+```bash
+curl -X POST \
+  -H "Authorization: Bearer seed-me" \
+  -H "x-session-id: test-123" \
+  http://localhost:3000/api/seed
+```
+
+**3. Get config again (should return seeded config):**
+```bash
+curl -H "x-session-id: test-123" http://localhost:3000/api/config
+```
+
+**4. Generate a filename:**
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "x-session-id: test-123" \
+  -d '{
+    "variableValues": {
+      "1": "1080x1080",
+      "2": "Creator",
+      "3": "Cold",
+      "4": ["Hero"],
+      "5": "Problem",
+      "6": "Learn More",
+      "7": "Minimalist",
+      "8": "Summer Campaign"
+    }
+  }' \
+  http://localhost:3000/api/names/generate
+```
+
+**Expected response:**
+```json
+{
+  "fileName": "1080x1080_creator_cold_hero_problem_learn_more_minimalist_summer_campaign"
+}
+```
+
+### Testing with Figma Plugin
+
+To test with the Figma plugin locally:
+
+1. Update the plugin's API URL to `http://localhost:3000`
+2. The plugin will need to handle CORS (which is already configured)
+3. Use a session ID like `figma_1234567890_abc123`
+
+**Note:** If testing from Figma plugin, you may need to use a tool like [ngrok](https://ngrok.com) to expose your local server, as Figma plugins may have restrictions on localhost connections.
+
